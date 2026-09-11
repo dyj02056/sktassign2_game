@@ -1,5 +1,5 @@
 // ============================================================
-// UI 렌더링 및 모달 관리
+// UI 렌더링 및 모달 관리 (라운드 모드 대응)
 // ============================================================
 const UI = {
   elements: {},
@@ -9,6 +9,8 @@ const UI = {
       score: document.getElementById('score'),
       wave: document.getElementById('wave'),
       combo: document.getElementById('combo'),
+      round: document.getElementById('round'),        // ✅ 라운드 표시
+      totalScore: document.getElementById('total-score'), // ✅ 누적 점수
       hpBar: document.getElementById('hp-bar'),
       hpText: document.getElementById('hp-text'),
       overlay: document.getElementById('overlay'),
@@ -28,7 +30,6 @@ const UI = {
       gameArea: document.getElementById('game-area')
     };
 
-    // ✅ [T02-C24] 저장된 음소거 상태 반영
     const saved = Utils.loadFromStorage();
     if (saved['pd.muted']) {
       AudioManager.muted = true;
@@ -45,22 +46,17 @@ const UI = {
       if (el) el.addEventListener(event, handler);
     };
 
-    // 방화벽 버튼
     safeAdd('firewall-btn', 'click', () => this.toggleFirewall());
-    // 로그 분석
     safeAdd('log-btn', 'click', () => this.startLogAnalysis());
 
-    // ✅ [T02-C24] 음소거 토글 시 즉시 저장
     safeAdd('mute-btn', 'click', (e) => {
       const muted = AudioManager.toggleMute();
       e.currentTarget.textContent = muted ? '🔇' : '🔊';
       Utils.saveToStorage('pd.muted', muted);
     });
 
-    // 일시정지
     safeAdd('pause-btn', 'click', () => this.togglePause());
 
-    // 방화벽 규칙 추가
     safeAdd('add-rule-btn', 'click', () => {
       const typeEl = document.getElementById('rule-type');
       const valueEl = document.getElementById('rule-value');
@@ -77,7 +73,6 @@ const UI = {
       }
     });
 
-    // 모달 닫기
     document.querySelectorAll('[data-close]').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const targetId = e.target.dataset.close;
@@ -86,27 +81,22 @@ const UI = {
       });
     });
 
-    // 다시 시작
     safeAdd('restart-btn', 'click', () => location.reload());
     safeAdd('resume-btn', 'click', () => this.togglePause());
     safeAdd('quit-btn', 'click', () => location.reload());
 
-    // ✅ [T02-C14] 탭 전환 감지 (탭 전환만, 창 blur는 무시)
+    // ✅ [T02-C14] 탭 전환 감지
     document.addEventListener('visibilitychange', () => {
       if (!window.Game || !window.Game.state.running) return;
-
       if (document.hidden) {
-        // 탭이 숨겨짐 → 자동 일시정지
         window.Game.pause();
       } else {
-        // 탭이 다시 보임 → 일시정지 모달 표시 (사용자가 재개)
         if (window.Game.state.autoPaused) {
           UI.showAutoPauseModal();
         }
       }
     });
 
-    // 단축키
     document.addEventListener('keydown', (e) => {
       if (e.key === 'f' || e.key === 'F') this.toggleFirewall();
       if (e.key === 'l' || e.key === 'L') this.startLogAnalysis();
@@ -174,17 +164,21 @@ const UI = {
     });
   },
 
-  // ✅ [T02-C25] HUD 표시 시 NaN/Infinity 방어
+  // ✅ [T02-C25] HUD 표시 시 NaN/Infinity 방어 + 라운드 표시
   updateHUD(state) {
     if (!this.elements.score) return;
 
     const safeScore = Number.isFinite(state.score) ? Math.max(0, Math.floor(state.score)) : 0;
     const safeWave = Number.isFinite(state.wave) ? Math.max(1, Math.floor(state.wave)) : 1;
     const safeCombo = Number.isFinite(state.combo) ? Math.max(0, Math.floor(state.combo)) : 0;
+    const safeRound = Number.isFinite(state.round) ? Math.max(1, Math.floor(state.round)) : 1;
+    const safeTotal = Number.isFinite(state.totalScore) ? Math.max(0, Math.floor(state.totalScore)) : 0;
 
     this.elements.score.textContent = safeScore;
     this.elements.wave.textContent = safeWave;
     if (this.elements.combo) this.elements.combo.textContent = `x${safeCombo}`;
+    if (this.elements.round) this.elements.round.textContent = safeRound;
+    if (this.elements.totalScore) this.elements.totalScore.textContent = safeTotal;
 
     const safeHp = Number.isFinite(state.hp) ? Math.max(0, state.hp) : 0;
     const hpPercent = (safeHp / CONFIG.INITIAL_HP) * 100;
@@ -273,14 +267,13 @@ const UI = {
       const h2 = modal.querySelector('h2');
       if (h2) h2.textContent = '⏸️ 일시정지';
       window.Game.pause();
-      window.Game.state.autoPaused = false;   // 수동 일시정지
+      window.Game.state.autoPaused = false;
     } else {
       modal.classList.add('hidden');
       window.Game.resume();
     }
   },
 
-  // ✅ [T02-C14] 자동 일시정지 안내 모달
   showAutoPauseModal() {
     const modal = this.elements.pauseModal;
     if (!modal) return;
@@ -293,22 +286,21 @@ const UI = {
     document.querySelectorAll('.modal').forEach(m => m.classList.add('hidden'));
   },
 
-  // ✅ [T02-C07] 게임 오버 화면
+  // ✅ [T02-C07] 게임 오버 화면 (라운드 진행 중 실패)
   showGameOver(state) {
     const scoreEl = document.getElementById('final-score');
     const waveEl = document.getElementById('final-wave');
     const blockedEl = document.getElementById('final-blocked');
     const comboEl = document.getElementById('final-combo');
 
-    if (scoreEl) scoreEl.textContent = state.score;
-    if (waveEl) waveEl.textContent = state.wave;
+    if (scoreEl) scoreEl.textContent = state.finalScore || state.score;
+    if (waveEl) waveEl.textContent = state.round || 1;
     if (blockedEl) blockedEl.textContent = state.blockedCount;
     if (comboEl) comboEl.textContent = state.maxCombo;
 
-    // 타이틀 원복 (승리 후 재시작 대비)
     const title = document.querySelector('.gameover-title');
     if (title) {
-      title.textContent = '💀 서버 다운!';
+      title.textContent = `💀 라운드 ${state.round || 1} 실패!`;
       title.style.color = '';
       title.style.textShadow = '';
     }
@@ -316,40 +308,99 @@ const UI = {
     const tipEl = document.getElementById('education-tip');
     if (tipEl) {
       const mostFrequent = state.mostFrequentAttack || 'general';
-      tipEl.textContent = EDUCATION_TIPS[mostFrequent] || EDUCATION_TIPS.general;
+      const tip = EDUCATION_TIPS[mostFrequent] || EDUCATION_TIPS.general;
+      tipEl.innerHTML = `
+        <div style="margin-bottom:10px;">
+          도달 라운드: <b>${state.round || 1}</b> | 누적 점수: <b>${state.finalScore || state.score}</b>
+        </div>
+        ${tip}
+      `;
     }
+
+    // 버튼 초기화 (라운드 클리어 화면에서 넘어온 경우 대비)
+    const oldBtn = document.getElementById('restart-btn');
+    const nextBtn = document.getElementById('next-round-btn');
+    const quitBtn = document.getElementById('quit-to-main-btn');
+    if (oldBtn) {
+      oldBtn.style.display = '';
+      oldBtn.textContent = '🔄 다시 시작';
+    }
+    if (nextBtn) nextBtn.style.display = 'none';
+    if (quitBtn) quitBtn.style.display = 'none';
 
     const modal = this.elements.gameoverModal;
     if (modal) modal.classList.remove('hidden');
   },
 
-  // ✅ [T02-C07] 승리 화면 (신규)
-  showWinScreen(state) {
+  // ✅ [라운드 모드] 라운드 클리어 화면
+  showRoundClearScreen(state, onNextRound) {
+    const modal = this.elements.gameoverModal;
+    if (!modal) return;
+
+    const title = modal.querySelector('.gameover-title');
+    if (title) {
+      title.textContent = `🎉 라운드 ${state.round} 클리어!`;
+      title.style.color = '#00ff88';
+      title.style.textShadow = '0 0 30px #00ff88';
+    }
+
     const scoreEl = document.getElementById('final-score');
     const waveEl = document.getElementById('final-wave');
     const blockedEl = document.getElementById('final-blocked');
     const comboEl = document.getElementById('final-combo');
 
     if (scoreEl) scoreEl.textContent = state.score;
-    if (waveEl) waveEl.textContent = state.wave;
+    if (waveEl) waveEl.textContent = state.round;
     if (blockedEl) blockedEl.textContent = state.blockedCount;
     if (comboEl) comboEl.textContent = state.maxCombo;
 
-    // 타이틀 변경
-    const title = document.querySelector('.gameover-title');
-    if (title) {
-      title.textContent = '🎉 미션 클리어!';
-      title.style.color = '#00ff88';
-      title.style.textShadow = '0 0 30px #00ff88';
-    }
-
     const tipEl = document.getElementById('education-tip');
     if (tipEl) {
-      tipEl.textContent = '💡 훌륭합니다! 실제 보안에서도 목표 시간 안에 위협을 차단하는 것이 핵심입니다.';
+      const nextRoundNum = state.round + 1;
+      tipEl.innerHTML = `
+        <div style="font-size:16px; margin-bottom:10px;">
+          누적 점수: <b style="color:#00ff88;">${state.totalScore}</b>
+        </div>
+        <div>
+          ▶ 다음 라운드 <b>${nextRoundNum}</b>는 <b>더 어려워집니다</b>.<br>
+          스폰 속도 ↑, 낙하 속도 ↑<br>
+          <br>
+          계속 도전하시겠어요? 아니면 여기서 마무리하시겠어요?
+        </div>
+      `;
     }
 
-    const modal = this.elements.gameoverModal;
-    if (modal) modal.classList.remove('hidden');
+    // 기존 restart 버튼 숨김, next/quit 버튼 표시
+    const oldBtn = document.getElementById('restart-btn');
+    if (oldBtn) oldBtn.style.display = 'none';
+
+    let nextBtn = document.getElementById('next-round-btn');
+    if (!nextBtn) {
+      nextBtn = Utils.createEl('button', '', '▶ 다음 라운드');
+      nextBtn.id = 'next-round-btn';
+      nextBtn.style.marginRight = '10px';
+      if (oldBtn && oldBtn.parentNode) {
+        oldBtn.parentNode.insertBefore(nextBtn, oldBtn);
+      }
+    }
+    nextBtn.style.display = '';
+    nextBtn.onclick = () => {
+      modal.classList.add('hidden');
+      onNextRound();
+    };
+
+    let quitBtn = document.getElementById('quit-to-main-btn');
+    if (!quitBtn) {
+      quitBtn = Utils.createEl('button', '', '🏠 메인으로');
+      quitBtn.id = 'quit-to-main-btn';
+      if (oldBtn && oldBtn.parentNode) {
+        oldBtn.parentNode.insertBefore(quitBtn, oldBtn);
+      }
+    }
+    quitBtn.style.display = '';
+    quitBtn.onclick = () => location.reload();
+
+    modal.classList.remove('hidden');
   },
 
   startLogAnalysis() {

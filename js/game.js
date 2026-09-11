@@ -1,5 +1,5 @@
 // ============================================================
-// 메인 게임 로직
+// 메인 게임 로직 (라운드 모드)
 // ============================================================
 const Game = {
   canvas: null,
@@ -10,9 +10,13 @@ const Game = {
   state: {
     running: false,
     paused: false,
-    finished: false,       // ✅ [T02-C07/C17] 종료 플래그
-    autoPaused: false,     // ✅ [T02-C14]
-    pausedAt: 0,           // ✅ [T02-C14]
+    finished: false,
+    autoPaused: false,
+    pausedAt: 0,
+    // ✅ [라운드 모드] 라운드 상태
+    round: 1,
+    totalScore: 0,
+    // 점수/HP
     score: 0,
     hp: CONFIG.INITIAL_HP,
     wave: 1,
@@ -25,7 +29,7 @@ const Game = {
     fallSpeed: CONFIG.BASE_FALL_SPEED,
     lastTime: 0,
     waveTimer: 0,
-    playTime: 0,           // ✅ [T02-C07] 30초 타이머
+    playTime: 0,
     attackCounts: {},
     highscore: 0
   },
@@ -50,19 +54,18 @@ const Game = {
     this.mode = mode;
     this.reset();
 
-    // ✅ [T02-C24/C25] 저장값 로드 (손상/빈 값 자동 폴백)
+    // ✅ [T02-C24/C25] 저장값 로드
     const saved = Utils.loadFromStorage();
     this.state.highscore = Number.isFinite(saved['pd.highscore']) ? saved['pd.highscore'] : 0;
     AudioManager.muted = (saved['pd.muted'] === true);
 
-    // totalGames 증가
     const totalGames = Number.isFinite(saved['pd.totalGames']) ? saved['pd.totalGames'] : 0;
     Utils.saveToStorage('pd.totalGames', totalGames + 1);
 
     this.state.running = true;
     this.state.paused = false;
     this.state.finished = false;
-    this.state.lastTime = 0;   // ✅ [T02-C17] 첫 프레임 감지용
+    this.state.lastTime = 0;
 
     UI.updateHUD(this.state);
     this.gameLoopId = requestAnimationFrame((t) => this.loop(t));
@@ -81,6 +84,8 @@ const Game = {
       finished: false,
       autoPaused: false,
       pausedAt: 0,
+      round: 1,
+      totalScore: 0,
       score: 0,
       hp: CONFIG.INITIAL_HP,
       wave: 1,
@@ -103,7 +108,31 @@ const Game = {
     if (UI.renderFirewallBar) UI.renderFirewallBar();
   },
 
-  // ✅ [T02-C14] 일시정지
+  // ✅ [라운드 모드] 라운드 내 상태만 리셋 (라운드 번호·누적 점수는 유지)
+  resetRoundState() {
+    this.packets.forEach(p => p.el && p.el.remove());
+    this.powerups.forEach(p => p.el && p.el.remove());
+    this.packets = [];
+    this.powerups = [];
+    this.activePowerups = {};
+
+    this.state.score = 0;
+    this.state.hp = CONFIG.INITIAL_HP;
+    this.state.wave = 1;
+    this.state.combo = 0;
+    this.state.maxCombo = this.state.maxCombo || 0;
+    this.state.comboTimeout = 0;
+    this.state.blockedCount = 0;
+    this.state.spawnTimer = 0;
+    this.state.waveTimer = 0;
+    this.state.playTime = 0;
+    this.state.attackCounts = {};
+
+    BossManager.reset();
+    Firewall.reset();
+    if (UI.renderFirewallBar) UI.renderFirewallBar();
+  },
+
   pause() {
     if (this.state.paused) return;
     this.state.paused = true;
@@ -111,13 +140,11 @@ const Game = {
     this.state.autoPaused = true;
   },
 
-  // ✅ [T02-C14] 재개 (타이머 안전 재설정)
   resume() {
     if (!this.state.paused) return;
     this.state.paused = false;
     this.state.autoPaused = false;
-    // lastTime을 현재 시각으로 갱신하여 dt 폭발 방지
-    this.state.lastTime = 0;   // loop()에서 첫 프레임으로 재감지
+    this.state.lastTime = 0;
   },
 
   spawnPacket(forcedDef = null, isBossSpawn = false, atX = null) {
@@ -237,7 +264,6 @@ const Game = {
   handlePacketClick(packet, event) {
     if (packet.resolved || !this.state.running || this.state.paused || this.state.finished) return;
 
-    // 암호화 패킷 → 복호화 미니게임
     if (packet.encrypted) {
       this.pause();
       CryptoGame.start(packet, (result) => {
@@ -287,12 +313,16 @@ const Game = {
   handleServerReach(packet) {
     if (packet.resolved || this.state.finished) return;
 
+    // 라운드별 HP 피해량 (4라운드부터 +5씩)
+    const hpDamage = CONFIG.HP_DAMAGE_PER_ATTACK +
+      Math.max(0, Math.floor((this.state.round - 4) / 1) * 0);
+
     if (packet.isAttack) {
       packet.markPassed();
-      this.state.hp -= CONFIG.HP_DAMAGE_PER_ATTACK;
+      this.state.hp -= hpDamage;
       this.resetCombo();
       UI.flashDamage();
-      UI.showFloatText(packet.x, packet.y - 30, `-${CONFIG.HP_DAMAGE_PER_ATTACK} HP`, '#ff3232');
+      UI.showFloatText(packet.x, packet.y - 30, `-${hpDamage} HP`, '#ff3232');
       try { AudioManager.damage(); } catch (e) {}
       new Particle(packet.x + 40, packet.y, '#ff3232', 15);
     } else {
@@ -310,7 +340,7 @@ const Game = {
     }
   },
 
-  // ✅ [T02-C07] 성공 조건 체크 포함
+  // ✅ [T02-C07] 성공 조건 체크
   addScore(amount) {
     let finalAmount = amount;
     if (this.activePowerups.double && Date.now() < this.activePowerups.double) {
@@ -319,7 +349,6 @@ const Game = {
     this.state.score += finalAmount;
     if (this.state.score < 0) this.state.score = 0;
 
-    // ✅ 성공 조건: 100점 도달
     if (this.state.score >= CONFIG.WIN_SCORE && !this.state.finished) {
       this.state.finished = true;
       this.win();
@@ -362,7 +391,6 @@ const Game = {
   loop(timestamp) {
     if (!this.state.running) return;
 
-    // ✅ [T02-C17] 첫 프레임 감지
     if (this.state.lastTime === 0) {
       this.state.lastTime = timestamp;
       this.gameLoopId = requestAnimationFrame((t) => this.loop(t));
@@ -372,7 +400,6 @@ const Game = {
     const rawDt = (timestamp - this.state.lastTime) / 16.67;
     const rawSec = (timestamp - this.state.lastTime) / 1000;
 
-    // ✅ [T02-C14/C17] dt 클램프 (탭 복귀, 렉 방어)
     const dt = Math.max(0, Math.min(rawDt, 3));
     const secondsElapsed = Math.max(0, Math.min(rawSec, CONFIG.MAX_FRAME_DELTA));
 
@@ -390,23 +417,20 @@ const Game = {
     if (!area) return;
     const serverY = area.clientHeight - CONFIG.SERVER_HEIGHT + 20;
 
-    // ✅ [T02-C07] 30초 타이머
+    // ✅ [T02-C07] 라운드 30초 타이머
     this.state.playTime += secondsElapsed * 1000;
     if (this.state.playTime >= CONFIG.MAX_PLAY_TIME && !this.state.finished) {
       this.state.finished = true;
-      this.gameOver();   // 시간 초과 → 실패 처리
+      this.gameOver();
       return;
     }
 
-    // 방화벽 에너지 재생
     Firewall.update(dt, secondsElapsed);
 
-    // 콤보 타임아웃
     if (this.state.combo > 0 && Date.now() > this.state.comboTimeout) {
       this.resetCombo();
     }
 
-    // 패킷 스폰
     this.state.spawnTimer += secondsElapsed * 1000;
     if (this.state.spawnTimer >= this.state.spawnRate) {
       this.state.spawnTimer = 0;
@@ -414,10 +438,8 @@ const Game = {
       if (Math.random() < 0.5) this.spawnPowerUp();
     }
 
-    // 보스 업데이트
     BossManager.update(dt, (def, isBoss) => this.spawnPacket(def, isBoss));
 
-    // 파워업 활성 상태 갱신
     const now = Date.now();
     let powerupChanged = false;
     Object.keys(this.activePowerups).forEach(type => {
@@ -430,14 +452,12 @@ const Game = {
       this.renderPowerupIndicators();
     }
 
-    // 웨이브 타이머
     this.state.waveTimer += secondsElapsed * 1000;
     if (this.state.waveTimer >= CONFIG.WAVE_DURATION && !BossManager.active) {
       this.state.waveTimer = 0;
       this.updateWave();
     }
 
-    // 패킷 업데이트
     for (let i = this.packets.length - 1; i >= 0; i--) {
       const p = this.packets[i];
       if (p.dead || !p.el) {
@@ -445,7 +465,6 @@ const Game = {
         continue;
       }
 
-      // WAF 자동 차단
       if (!p.resolved && this.activePowerups.waf && Date.now() < this.activePowerups.waf) {
         if (p.isAttack) {
           p.resolved = true;
@@ -459,7 +478,6 @@ const Game = {
         }
       }
 
-      // 방화벽 규칙 자동 차단
       if (!p.resolved && Firewall.shouldAutoBlock(p)) {
         p.resolved = true;
         if (p.isAttack) {
@@ -484,7 +502,6 @@ const Game = {
       }
     }
 
-    // 파워업 업데이트
     for (let i = this.powerups.length - 1; i >= 0; i--) {
       const p = this.powerups[i];
       if (p.dead) {
@@ -501,7 +518,7 @@ const Game = {
     UI.updateHUD(this.state);
   },
 
-  // ✅ [T02-C07] 승리 처리
+  // ✅ [라운드 모드] 승리 처리 → 다음 라운드 버튼 제공
   win() {
     this.state.running = false;
     cancelAnimationFrame(this.gameLoopId);
@@ -509,10 +526,54 @@ const Game = {
     this.packets.forEach(p => p.el && p.el.remove());
     this.powerups.forEach(p => p.el && p.el.remove());
 
-    Utils.setHighScore(this.state.score);
+    // ✅ 누적 점수 반영
+    this.state.totalScore += this.state.score;
+
+    // ✅ 최고 점수 & 최고 라운드 저장
+    Utils.setHighScore(this.state.totalScore);
+    const saved = Utils.loadFromStorage();
+    const highestRound = Number.isFinite(saved['pd.highestRound']) ? saved['pd.highestRound'] : 1;
+    if (this.state.round > highestRound) {
+      Utils.saveToStorage('pd.highestRound', this.state.round);
+    }
+
     try { AudioManager.win(); } catch (e) {}
 
-    UI.showWinScreen(this.state);
+    // ✅ 라운드 클리어 화면 → 다음 라운드 콜백
+    UI.showRoundClearScreen(this.state, () => this.nextRound());
+  },
+
+  // ✅ [라운드 모드] 다음 라운드 시작 (난이도 상승)
+  nextRound() {
+    const nextRoundNum = this.state.round + 1;
+    const prevTotalScore = this.state.totalScore;
+    const prevMaxCombo = this.state.maxCombo;
+
+    // 라운드 내 상태만 리셋
+    this.resetRoundState();
+    this.state.round = nextRoundNum;
+    this.state.totalScore = prevTotalScore;
+    this.state.maxCombo = prevMaxCombo;
+
+    // ✅ 난이도 상승 적용
+    const diff = CONFIG.ROUND_DIFFICULTY;
+    this.state.spawnRate = Math.max(
+      CONFIG.MIN_SPAWN_RATE,
+      CONFIG.BASE_SPAWN_RATE - (nextRoundNum - 1) * diff.spawnRateDecrease
+    );
+    this.state.fallSpeed = Math.min(
+      CONFIG.MAX_FALL_SPEED,
+      CONFIG.BASE_FALL_SPEED + (nextRoundNum - 1) * diff.fallSpeedIncrease
+    );
+
+    // ✅ 라운드 시작
+    this.state.running = true;
+    this.state.paused = false;
+    this.state.finished = false;
+    this.state.lastTime = 0;
+
+    UI.updateHUD(this.state);
+    this.gameLoopId = requestAnimationFrame((t) => this.loop(t));
   },
 
   gameOver() {
@@ -521,7 +582,6 @@ const Game = {
     this.state.finished = true;
     cancelAnimationFrame(this.gameLoopId);
 
-    // 가장 많이 나온 공격 유형
     let mostFrequent = 'general';
     let maxCount = 0;
     Object.entries(this.state.attackCounts).forEach(([type, count]) => {
@@ -532,7 +592,10 @@ const Game = {
     });
     this.state.mostFrequentAttack = mostFrequent;
 
-    Utils.setHighScore(this.state.score);
+    // ✅ 누적 점수 (라운드 진행 중 실패 시)
+    const finalScore = this.state.totalScore + this.state.score;
+    Utils.setHighScore(finalScore);
+    this.state.finalScore = finalScore;
 
     this.packets.forEach(p => p.el && p.el.remove());
     this.powerups.forEach(p => p.el && p.el.remove());

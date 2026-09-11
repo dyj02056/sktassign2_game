@@ -14,7 +14,7 @@ const CONFIG = {
   MAX_ENERGY: 10,
   ENERGY_REGEN: 0.5,
 
-  // 난이도
+  // 난이도 기본
   BASE_SPAWN_RATE: 1200,
   MIN_SPAWN_RATE: 350,
   BASE_FALL_SPEED: 1.2,
@@ -23,8 +23,17 @@ const CONFIG = {
   BOSS_WAVE_INTERVAL: 5,
 
   // ✅ [T02-C07] 성공 조건 & 시간 제한
-  WIN_SCORE: 100,                // 100점 도달 시 승리
-  MAX_PLAY_TIME: 30000,          // (안전장치) 30초 초과 시 실패
+  WIN_SCORE: 100,                // 라운드마다 동일 목표
+  MAX_PLAY_TIME: 30000,          // 라운드당 30초 제한
+
+  // ✅ [라운드 모드] 라운드별 난이도 상승 계수
+  ROUND_DIFFICULTY: {
+    spawnRateDecrease: 100,      // 라운드마다 스폰 주기 -100ms
+    fallSpeedIncrease: 0.2,      // 라운드마다 낙하 속도 +0.2
+    hpDamageIncrease: 0,         // 4라운드부터 +5씩 (game.js에서 조건 처리)
+    bossEveryRounds: 5           // 5라운드마다 보스 등장
+  },
+  MAX_ROUND: 999,                // 사실상 무한
 
   // 점수 규칙
   SCORE_PER_ATTACK_BLOCK: 10,
@@ -39,10 +48,10 @@ const CONFIG = {
   POWERUP_DURATION: 10000,
 
   // ✅ [T02-C14] 프레임 안전
-  MAX_FRAME_DELTA: 0.05,         // 최대 인정 frame delta (초)
-  AUTO_PAUSE_ON_BLUR: false,     // 창 blur는 감지 안 함 (탭 전환만)
+  MAX_FRAME_DELTA: 0.05,
+  AUTO_PAUSE_ON_BLUR: false,
 
-  // ✅ [T02-C24/C25] 저장 스키마 (손상/빈 값 → 기본값 폴백)
+  // ✅ [T02-C24/C25] 저장 스키마
   STORAGE_SCHEMA: {
     'pd.highscore': {
       type: 'number', default: 0, label: '최고 점수',
@@ -54,6 +63,10 @@ const CONFIG = {
     'pd.totalGames': {
       type: 'number', default: 0, label: '총 플레이 횟수',
       min: 0, max: 999999
+    },
+    'pd.highestRound': {
+      type: 'number', default: 1, label: '최고 도달 라운드',
+      min: 1, max: 999
     }
   },
   STORAGE_PREFIX: 'pd.'
