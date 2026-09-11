@@ -1,3 +1,63 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🛡️ 패킷 디펜더 - 네트워크 보안 시뮬레이터</title>
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/packets.css">
+  <link rel="stylesheet" href="css/modals.css">
+  <link rel="stylesheet" href="css/effects.css">
+</head>
+<body>
+  <div id="app">
+    <!-- 상단 HUD -->
+    <header id="hud">
+      <div class="hud-left">
+        <div class="hud-item">🎯 점수: <span id="score">0</span></div>
+        <div class="hud-item">🌊 웨이브: <span id="wave">1</span></div>
+        <div class="hud-item">⚡ 콤보: <span id="combo">x1</span></div>
+      </div>
+      <div class="hud-center">
+        <div id="hp-bar-container">
+          <div id="hp-bar"></div>
+          <span id="hp-text">100 / 100</span>
+        </div>
+      </div>
+      <div class="hud-right">
+        <button id="firewall-btn" class="icon-btn" title="방화벽 규칙 (F)">🔥</button>
+        <button id="log-btn" class="icon-btn" title="로그 분석 (L)">📋</button>
+        <button id="mute-btn" class="icon-btn" title="음소거">🔊</button>
+        <button id="pause-btn" class="icon-btn" title="일시정지 (P)">⏸️</button>
+      </div>
+    </header>
+
+    <!-- 게임 캔버스 영역 -->
+    <main id="game-area">
+      <canvas id="game-canvas"></canvas>
+      <div id="packet-layer"></div>
+      <div id="powerup-layer"></div>
+      <div id="effects-layer"></div>
+
+      <!-- 보스 HP 바 -->
+      <div id="boss-hp-container" class="hidden">
+        <div id="boss-hp-bar"></div>
+        <span id="boss-hp-text">BOSS</span>
+      </div>
+
+      <!-- 방화벽 표시줄 -->
+      <div id="firewall-bar" class="hidden">
+        <span>🔥 방화벽 활성 규칙:</span>
+        <div id="firewall-rules"></div>
+      </div>
+
+      <!-- 서버 -->
+      <div id="server">
+        <span class="server-icon">🖥️</span>
+        <span class="server-label">SERVER</span>
+      </div>
+    </main>
+
     <!-- 시작 오버레이 -->
     <div id="overlay" class="overlay">
       <div class="overlay-content">
@@ -27,12 +87,6 @@
           </button>
         </div>
 
-        <!-- ✅ [T02-C07] 성공/실패 조건 명시 -->
-        <div class="win-lose-conditions">
-          <p>🎯 <b>성공 조건:</b> 30초 안에 <b>100점</b>을 획득하세요!</p>
-          <p>💀 <b>실패 조건:</b> 서버 HP가 <b>0</b>이 되거나 30초가 지나면 패배합니다.</p>
-        </div>
-
         <div class="legend">
           <div class="legend-item"><span style="color:#00ff88">✅ 정상 트래픽</span> → 통과</div>
           <div class="legend-item"><span style="color:#ff3232">💥 DDoS</span> → 차단</div>
@@ -47,3 +101,84 @@
         </div>
       </div>
     </div>
+
+    <!-- 방화벽 규칙 모달 -->
+    <div id="firewall-modal" class="modal hidden">
+      <div class="modal-content">
+        <h2>🔥 방화벽 규칙 설정</h2>
+        <p class="modal-desc">IP 대역/포트 규칙을 만들어 자동 차단하세요. 규칙 1개 = 1 에너지/초</p>
+        <div id="firewall-energy">에너지: <span id="energy-value">5</span></div>
+        <div id="rules-list"></div>
+        <div class="rule-creator">
+          <select id="rule-type">
+            <option value="ip">IP 대역</option>
+            <option value="port">포트</option>
+            <option value="type">패킷 유형</option>
+          </select>
+          <input id="rule-value" placeholder="예: 192.168 / 443 / ddos">
+          <button id="add-rule-btn">+ 규칙 추가</button>
+        </div>
+        <button class="close-btn" data-close="firewall-modal">닫기</button>
+      </div>
+    </div>
+
+    <!-- 로그 분석 모달 -->
+    <div id="log-modal" class="modal hidden">
+      <div class="modal-content log-content">
+        <h2>📋 로그 분석 모드</h2>
+        <p class="modal-desc">의심스러운 로그를 클릭하여 격리하세요. 30초 안에 최대한 많이!</p>
+        <div id="log-timer">남은 시간: 30s</div>
+        <div id="log-stream"></div>
+        <button class="close-btn" data-close="log-modal">닫기</button>
+      </div>
+    </div>
+
+    <!-- 암호화 미니게임 모달 -->
+    <div id="crypto-modal" class="modal hidden">
+      <div class="modal-content crypto-content">
+        <h2>🔐 암호화 패킷 복호화</h2>
+        <p class="modal-desc">패킷 내용을 복호화하여 정상/악성 여부를 판단하세요.</p>
+        <div id="cipher-display"></div>
+        <div id="crypto-choices"></div>
+      </div>
+    </div>
+
+    <!-- 게임 오버 -->
+    <div id="gameover-modal" class="modal hidden">
+      <div class="modal-content">
+        <h1 class="gameover-title">💀 서버 다운!</h1>
+        <div class="gameover-stats">
+          <div>최종 점수: <b id="final-score">0</b></div>
+          <div>도달 웨이브: <b id="final-wave">1</b></div>
+          <div>차단한 공격: <b id="final-blocked">0</b></div>
+          <div>최대 콤보: <b id="final-combo">0</b></div>
+        </div>
+        <div id="education-tip" class="education-tip"></div>
+        <button id="restart-btn">다시 시작</button>
+      </div>
+    </div>
+
+    <!-- 일시정지 -->
+    <div id="pause-modal" class="modal hidden">
+      <div class="modal-content">
+        <h2>⏸️ 일시정지</h2>
+        <button id="resume-btn">계속하기</button>
+        <button id="quit-btn">메인으로</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/entities.js"></script>
+  <script src="js/firewall.js"></script>
+  <script src="js/crypto.js"></script>
+  <script src="js/boss.js"></script>
+  <script src="js/logAnalyzer.js"></script>
+  <script src="js/multiplayer.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
