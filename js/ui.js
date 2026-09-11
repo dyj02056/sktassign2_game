@@ -1,5 +1,5 @@
 // ============================================================
-// UI 렌더링 및 모달 관리 (라운드 모드 대응)
+// UI 렌더링 및 모달 관리 (클래식 / 무한 모드 대응)
 // ============================================================
 const UI = {
   elements: {},
@@ -9,8 +9,8 @@ const UI = {
       score: document.getElementById('score'),
       wave: document.getElementById('wave'),
       combo: document.getElementById('combo'),
-      round: document.getElementById('round'),        // ✅ 라운드 표시
-      totalScore: document.getElementById('total-score'), // ✅ 누적 점수
+      round: document.getElementById('round'),
+      totalScore: document.getElementById('total-score'),
       hpBar: document.getElementById('hp-bar'),
       hpText: document.getElementById('hp-text'),
       overlay: document.getElementById('overlay'),
@@ -85,7 +85,6 @@ const UI = {
     safeAdd('resume-btn', 'click', () => this.togglePause());
     safeAdd('quit-btn', 'click', () => location.reload());
 
-    // ✅ [T02-C14] 탭 전환 감지
     document.addEventListener('visibilitychange', () => {
       if (!window.Game || !window.Game.state.running) return;
       if (document.hidden) {
@@ -164,7 +163,6 @@ const UI = {
     });
   },
 
-  // ✅ [T02-C25] HUD 표시 시 NaN/Infinity 방어 + 라운드 표시
   updateHUD(state) {
     if (!this.elements.score) return;
 
@@ -286,21 +284,27 @@ const UI = {
     document.querySelectorAll('.modal').forEach(m => m.classList.add('hidden'));
   },
 
-  // ✅ [T02-C07] 게임 오버 화면 (라운드 진행 중 실패)
+  // ✅ 클래식 모드 / 무한 모드 실패 화면
   showGameOver(state) {
     const scoreEl = document.getElementById('final-score');
     const waveEl = document.getElementById('final-wave');
     const blockedEl = document.getElementById('final-blocked');
     const comboEl = document.getElementById('final-combo');
 
+    const modeConfig = CONFIG.GAME_MODES[window.Game.mode] || {};
+
     if (scoreEl) scoreEl.textContent = state.finalScore || state.score;
-    if (waveEl) waveEl.textContent = state.round || 1;
+    if (waveEl) waveEl.textContent = modeConfig.hasRounds ? (state.round || 1) : (state.wave || 1);
     if (blockedEl) blockedEl.textContent = state.blockedCount;
     if (comboEl) comboEl.textContent = state.maxCombo;
 
     const title = document.querySelector('.gameover-title');
     if (title) {
-      title.textContent = `💀 라운드 ${state.round || 1} 실패!`;
+      if (modeConfig.hasRounds) {
+        title.textContent = `💀 라운드 ${state.round || 1} 실패!`;
+      } else {
+        title.textContent = '💀 서버 다운!';
+      }
       title.style.color = '';
       title.style.textShadow = '';
     }
@@ -309,15 +313,14 @@ const UI = {
     if (tipEl) {
       const mostFrequent = state.mostFrequentAttack || 'general';
       const tip = EDUCATION_TIPS[mostFrequent] || EDUCATION_TIPS.general;
-      tipEl.innerHTML = `
-        <div style="margin-bottom:10px;">
-          도달 라운드: <b>${state.round || 1}</b> | 누적 점수: <b>${state.finalScore || state.score}</b>
-        </div>
-        ${tip}
-      `;
+      let summary = '';
+      if (modeConfig.hasRounds) {
+        summary = `<div style="margin-bottom:10px;">도달 라운드: <b>${state.round || 1}</b> | 누적 점수: <b>${state.finalScore || state.score}</b></div>`;
+      }
+      tipEl.innerHTML = summary + tip;
     }
 
-    // 버튼 초기화 (라운드 클리어 화면에서 넘어온 경우 대비)
+    // 버튼 초기화
     const oldBtn = document.getElementById('restart-btn');
     const nextBtn = document.getElementById('next-round-btn');
     const quitBtn = document.getElementById('quit-to-main-btn');
@@ -332,7 +335,46 @@ const UI = {
     if (modal) modal.classList.remove('hidden');
   },
 
-  // ✅ [라운드 모드] 라운드 클리어 화면
+  // ✅ [클래식 모드] 승리 화면 (라운드 개념 없음)
+  showWinScreen(state) {
+    const scoreEl = document.getElementById('final-score');
+    const waveEl = document.getElementById('final-wave');
+    const blockedEl = document.getElementById('final-blocked');
+    const comboEl = document.getElementById('final-combo');
+
+    if (scoreEl) scoreEl.textContent = state.score;
+    if (waveEl) waveEl.textContent = state.wave;
+    if (blockedEl) blockedEl.textContent = state.blockedCount;
+    if (comboEl) comboEl.textContent = state.maxCombo;
+
+    const title = document.querySelector('.gameover-title');
+    if (title) {
+      title.textContent = '🎉 미션 클리어!';
+      title.style.color = '#00ff88';
+      title.style.textShadow = '0 0 30px #00ff88';
+    }
+
+    const tipEl = document.getElementById('education-tip');
+    if (tipEl) {
+      tipEl.textContent = '💡 훌륭합니다! 실제 보안에서도 목표 시간 안에 위협을 차단하는 것이 핵심입니다.';
+    }
+
+    // 버튼 초기화 (라운드 클리어에서 넘어온 경우 대비)
+    const oldBtn = document.getElementById('restart-btn');
+    const nextBtn = document.getElementById('next-round-btn');
+    const quitBtn = document.getElementById('quit-to-main-btn');
+    if (oldBtn) {
+      oldBtn.style.display = '';
+      oldBtn.textContent = '🔄 다시 시작';
+    }
+    if (nextBtn) nextBtn.style.display = 'none';
+    if (quitBtn) quitBtn.style.display = 'none';
+
+    const modal = this.elements.gameoverModal;
+    if (modal) modal.classList.remove('hidden');
+  },
+
+  // ✅ [무한 모드] 라운드 클리어 화면
   showRoundClearScreen(state, onNextRound) {
     const modal = this.elements.gameoverModal;
     if (!modal) return;
@@ -370,7 +412,6 @@ const UI = {
       `;
     }
 
-    // 기존 restart 버튼 숨김, next/quit 버튼 표시
     const oldBtn = document.getElementById('restart-btn');
     if (oldBtn) oldBtn.style.display = 'none';
 

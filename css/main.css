@@ -494,3 +494,11 @@ body {
 #game-area {
   overflow: hidden;
 }
+
+/* css/main.css 하단에 추가 (선택) */
+.mode-select {
+  grid-template-columns: repeat(3, 1fr);
+}
+@media (max-width: 900px) {
+  .mode-select { grid-template-columns: repeat(2, 1fr); }
+}

@@ -23,17 +23,39 @@ const CONFIG = {
   BOSS_WAVE_INTERVAL: 5,
 
   // ✅ [T02-C07] 성공 조건 & 시간 제한
-  WIN_SCORE: 100,                // 라운드마다 동일 목표
-  MAX_PLAY_TIME: 30000,          // 라운드당 30초 제한
+  WIN_SCORE: 100,
+  MAX_PLAY_TIME: 30000,          // 라운드(1판)당 30초
 
-  // ✅ [라운드 모드] 라운드별 난이도 상승 계수
-  ROUND_DIFFICULTY: {
-    spawnRateDecrease: 100,      // 라운드마다 스폰 주기 -100ms
-    fallSpeedIncrease: 0.2,      // 라운드마다 낙하 속도 +0.2
-    hpDamageIncrease: 0,         // 4라운드부터 +5씩 (game.js에서 조건 처리)
-    bossEveryRounds: 5           // 5라운드마다 보스 등장
+  // ✅ [모드별 설정]
+  GAME_MODES: {
+    classic: {
+      label: '클래식 모드',
+      hasRounds: false,          // 라운드 개념 없음 (1판)
+      maxRounds: 1
+    },
+    endless: {
+      label: '무한 모드',
+      hasRounds: true,           // 라운드 무한 진행
+      maxRounds: 999,
+      difficulty: {
+        spawnRateDecrease: 100,  // 라운드마다 스폰 주기 -100ms
+        fallSpeedIncrease: 0.2,  // 라운드마다 낙하 속도 +0.2
+        bossEveryRounds: 5       // 5라운드마다 보스
+      }
+    },
+    crypto: {
+      label: '암호화 모드',
+      hasRounds: false
+    },
+    log: {
+      label: '로그 분석 모드',
+      hasRounds: false
+    },
+    multiplayer: {
+      label: '멀티플레이어',
+      hasRounds: false
+    }
   },
-  MAX_ROUND: 999,                // 사실상 무한
 
   // 점수 규칙
   SCORE_PER_ATTACK_BLOCK: 10,
@@ -135,7 +157,7 @@ const BOSSES = [
 ];
 
 // ============================================================
-// 교육 팁 (게임 오버 시 표시)
+// 교육 팁
 // ============================================================
 const EDUCATION_TIPS = {
   ddos: '💡 DDoS는 다수 좀비 PC가 동시에 트래픽을 보내 서버를 마비시킵니다. CDN/로드밸런서로 분산 대응합니다.',

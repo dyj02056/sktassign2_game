@@ -2,18 +2,14 @@
 // 진입점 - 초기화 및 모드 선택 처리
 // ============================================================
 document.addEventListener('DOMContentLoaded', () => {
-  // 게임 초기화
   UI.init();
   Game.init();
-
-  // ✅ [T02-C17] 오디오 초기화는 여기서 하지 않음 (사용자 제스처 필요)
 
   // 모드 선택 버튼
   document.querySelectorAll('.mode-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const mode = btn.dataset.mode;
 
-      // ✅ [T02-C17] 첫 클릭 시 오디오 초기화 + unlock
       AudioManager.init();
       AudioManager.unlock();
 
@@ -24,12 +20,13 @@ document.addEventListener('DOMContentLoaded', () => {
       } else if (mode === 'log') {
         startLogOnlyMode();
       } else {
+        // 'classic' | 'endless' | 'crypto'
         Game.start(mode);
       }
     });
   });
 
-  // ✅ [T02-C17] 첫 페이지 클릭에도 오디오 초기화 시도 (백업)
+  // 백업 오디오 초기화
   document.addEventListener('click', () => {
     if (!AudioManager.initialized) {
       AudioManager.init();
@@ -92,7 +89,6 @@ function startLogOnlyMode() {
   runRound();
 }
 
-// 전역 에러 핸들링
 window.addEventListener('error', (e) => {
   console.error('Game error:', e.error);
 });

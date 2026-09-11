@@ -1,5 +1,5 @@
 // ============================================================
-// 메인 게임 로직 (라운드 모드)
+// 메인 게임 로직 (클래식 / 무한 모드 분기)
 // ============================================================
 const Game = {
   canvas: null,
@@ -13,10 +13,8 @@ const Game = {
     finished: false,
     autoPaused: false,
     pausedAt: 0,
-    // ✅ [라운드 모드] 라운드 상태
     round: 1,
     totalScore: 0,
-    // 점수/HP
     score: 0,
     hp: CONFIG.INITIAL_HP,
     wave: 1,
@@ -50,11 +48,12 @@ const Game = {
     this.canvas.height = window.innerHeight - 60;
   },
 
+  // ✅ mode: 'classic' | 'endless' | 'crypto'
   start(mode = 'classic') {
     this.mode = mode;
     this.reset();
 
-    // ✅ [T02-C24/C25] 저장값 로드
+    // 저장값 로드
     const saved = Utils.loadFromStorage();
     this.state.highscore = Number.isFinite(saved['pd.highscore']) ? saved['pd.highscore'] : 0;
     AudioManager.muted = (saved['pd.muted'] === true);
@@ -108,7 +107,6 @@ const Game = {
     if (UI.renderFirewallBar) UI.renderFirewallBar();
   },
 
-  // ✅ [라운드 모드] 라운드 내 상태만 리셋 (라운드 번호·누적 점수는 유지)
   resetRoundState() {
     this.packets.forEach(p => p.el && p.el.remove());
     this.powerups.forEach(p => p.el && p.el.remove());
@@ -120,7 +118,6 @@ const Game = {
     this.state.hp = CONFIG.INITIAL_HP;
     this.state.wave = 1;
     this.state.combo = 0;
-    this.state.maxCombo = this.state.maxCombo || 0;
     this.state.comboTimeout = 0;
     this.state.blockedCount = 0;
     this.state.spawnTimer = 0;
@@ -313,9 +310,7 @@ const Game = {
   handleServerReach(packet) {
     if (packet.resolved || this.state.finished) return;
 
-    // 라운드별 HP 피해량 (4라운드부터 +5씩)
-    const hpDamage = CONFIG.HP_DAMAGE_PER_ATTACK +
-      Math.max(0, Math.floor((this.state.round - 4) / 1) * 0);
+    const hpDamage = CONFIG.HP_DAMAGE_PER_ATTACK;
 
     if (packet.isAttack) {
       packet.markPassed();
@@ -340,7 +335,6 @@ const Game = {
     }
   },
 
-  // ✅ [T02-C07] 성공 조건 체크
   addScore(amount) {
     let finalAmount = amount;
     if (this.activePowerups.double && Date.now() < this.activePowerups.double) {
@@ -417,7 +411,7 @@ const Game = {
     if (!area) return;
     const serverY = area.clientHeight - CONFIG.SERVER_HEIGHT + 20;
 
-    // ✅ [T02-C07] 라운드 30초 타이머
+    // ✅ [T02-C07] 30초 타이머 (모드 무관)
     this.state.playTime += secondsElapsed * 1000;
     if (this.state.playTime >= CONFIG.MAX_PLAY_TIME && !this.state.finished) {
       this.state.finished = true;
@@ -518,7 +512,7 @@ const Game = {
     UI.updateHUD(this.state);
   },
 
-  // ✅ [라운드 모드] 승리 처리 → 다음 라운드 버튼 제공
+  // ✅ 승리 처리 (모드 분기)
   win() {
     this.state.running = false;
     cancelAnimationFrame(this.gameLoopId);
@@ -526,47 +520,58 @@ const Game = {
     this.packets.forEach(p => p.el && p.el.remove());
     this.powerups.forEach(p => p.el && p.el.remove());
 
-    // ✅ 누적 점수 반영
-    this.state.totalScore += this.state.score;
+    const modeConfig = CONFIG.GAME_MODES[this.mode] || {};
 
-    // ✅ 최고 점수 & 최고 라운드 저장
-    Utils.setHighScore(this.state.totalScore);
-    const saved = Utils.loadFromStorage();
-    const highestRound = Number.isFinite(saved['pd.highestRound']) ? saved['pd.highestRound'] : 1;
-    if (this.state.round > highestRound) {
-      Utils.saveToStorage('pd.highestRound', this.state.round);
+    // ✅ 무한 모드: 누적 점수 & 라운드 진행
+    if (modeConfig.hasRounds) {
+      this.state.totalScore += this.state.score;
+      Utils.setHighScore(this.state.totalScore);
+
+      const saved = Utils.loadFromStorage();
+      const highestRound = Number.isFinite(saved['pd.highestRound']) ? saved['pd.highestRound'] : 1;
+      if (this.state.round > highestRound) {
+        Utils.saveToStorage('pd.highestRound', this.state.round);
+      }
+
+      try { AudioManager.win(); } catch (e) {}
+
+      UI.showRoundClearScreen(this.state, () => this.nextRound());
+    } else {
+      // ✅ 클래식 모드: 1판 승리 → 종료
+      Utils.setHighScore(this.state.score);
+      try { AudioManager.win(); } catch (e) {}
+      UI.showWinScreen(this.state);
     }
-
-    try { AudioManager.win(); } catch (e) {}
-
-    // ✅ 라운드 클리어 화면 → 다음 라운드 콜백
-    UI.showRoundClearScreen(this.state, () => this.nextRound());
   },
 
-  // ✅ [라운드 모드] 다음 라운드 시작 (난이도 상승)
+  // ✅ 무한 모드 전용: 다음 라운드 시작
   nextRound() {
+    const modeConfig = CONFIG.GAME_MODES[this.mode];
+    if (!modeConfig || !modeConfig.hasRounds) return;
+
     const nextRoundNum = this.state.round + 1;
     const prevTotalScore = this.state.totalScore;
     const prevMaxCombo = this.state.maxCombo;
 
-    // 라운드 내 상태만 리셋
     this.resetRoundState();
     this.state.round = nextRoundNum;
     this.state.totalScore = prevTotalScore;
     this.state.maxCombo = prevMaxCombo;
 
-    // ✅ 난이도 상승 적용
-    const diff = CONFIG.ROUND_DIFFICULTY;
+    // 난이도 상승
+    const diff = modeConfig.difficulty || {};
+    const spawnDecrease = diff.spawnRateDecrease || 100;
+    const speedIncrease = diff.fallSpeedIncrease || 0.2;
+
     this.state.spawnRate = Math.max(
       CONFIG.MIN_SPAWN_RATE,
-      CONFIG.BASE_SPAWN_RATE - (nextRoundNum - 1) * diff.spawnRateDecrease
+      CONFIG.BASE_SPAWN_RATE - (nextRoundNum - 1) * spawnDecrease
     );
     this.state.fallSpeed = Math.min(
       CONFIG.MAX_FALL_SPEED,
-      CONFIG.BASE_FALL_SPEED + (nextRoundNum - 1) * diff.fallSpeedIncrease
+      CONFIG.BASE_FALL_SPEED + (nextRoundNum - 1) * speedIncrease
     );
 
-    // ✅ 라운드 시작
     this.state.running = true;
     this.state.paused = false;
     this.state.finished = false;
@@ -592,10 +597,13 @@ const Game = {
     });
     this.state.mostFrequentAttack = mostFrequent;
 
-    // ✅ 누적 점수 (라운드 진행 중 실패 시)
-    const finalScore = this.state.totalScore + this.state.score;
-    Utils.setHighScore(finalScore);
+    // ✅ 무한 모드: 누적 점수까지 합산
+    const modeConfig = CONFIG.GAME_MODES[this.mode] || {};
+    const finalScore = modeConfig.hasRounds
+      ? this.state.totalScore + this.state.score
+      : this.state.score;
     this.state.finalScore = finalScore;
+    Utils.setHighScore(finalScore);
 
     this.packets.forEach(p => p.el && p.el.remove());
     this.powerups.forEach(p => p.el && p.el.remove());
