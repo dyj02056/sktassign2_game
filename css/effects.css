@@ -1,0 +1,171 @@
+/* 화면 플래시 */
+#damage-flash {
+  position: absolute;
+  inset: 0;
+  background: var(--red);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 45;
+  transition: opacity 0.15s;
+}
+
+#heal-flash {
+  position: absolute;
+  inset: 0;
+  background: var(--green);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 45;
+  transition: opacity 0.15s;
+}
+
+/* 플로팅 텍스트 */
+.float-text {
+  position: absolute;
+  font-weight: bold;
+  font-size: 18px;
+  pointer-events: none;
+  animation: floatUp 1.2s forwards;
+  z-index: 60;
+  text-shadow: 0 0 8px currentColor;
+}
+
+@keyframes floatUp {
+  0% { transform: translateY(0) scale(1); opacity: 1; }
+  100% { transform: translateY(-60px) scale(1.2); opacity: 0; }
+}
+
+/* 콤보 텍스트 */
+.combo-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 60px;
+  font-weight: bold;
+  color: var(--yellow);
+  text-shadow: 0 0 30px var(--yellow);
+  pointer-events: none;
+  animation: comboAnim 0.8s forwards;
+  z-index: 100;
+}
+
+@keyframes comboAnim {
+  0% { transform: translate(-50%, -50%) scale(0.3); opacity: 0; }
+  40% { transform: translate(-50%, -50%) scale(1.3); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+}
+
+/* 파티클 */
+.particle {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: particleFade 0.8s forwards;
+  z-index: 55;
+}
+
+@keyframes particleFade {
+  0% { transform: translate(0, 0) scale(1); opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)) scale(0); opacity: 0; }
+}
+
+/* 스캔라인 효과 */
+#game-area::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 255, 136, 0.03) 0px,
+    rgba(0, 255, 136, 0.03) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* 보스 등장 경고 */
+.boss-warning {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: rgba(255, 0, 0, 0.2);
+  color: var(--red);
+  font-size: 60px;
+  font-weight: bold;
+  letter-spacing: 10px;
+  text-shadow: 0 0 40px var(--red);
+  z-index: 80;
+  animation: warningFlash 0.5s 4;
+  pointer-events: none;
+}
+
+@keyframes warningFlash {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
+}
+
+/* 웨이브 전환 효과 */
+.wave-transition {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: var(--yellow);
+  font-size: 70px;
+  font-weight: bold;
+  letter-spacing: 8px;
+  text-shadow: 0 0 40px var(--yellow);
+  z-index: 80;
+  animation: waveTransition 1.5s forwards;
+  pointer-events: none;
+}
+
+@keyframes waveTransition {
+  0% { opacity: 0; transform: scale(0.5); }
+  30% { opacity: 1; transform: scale(1); }
+  70% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.5); }
+}
+
+/* 파워업 활성화 글로우 */
+.powerup-active-glow {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 40;
+  animation: glowPulse 1s infinite;
+}
+
+@keyframes glowPulse {
+  0%, 100% { box-shadow: inset 0 0 60px transparent; }
+  50% { box-shadow: inset 0 0 60px currentColor; }
+}
+
+/* 흔들림 효과 (피격) */
+.shake {
+  animation: shake 0.3s;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-8px); }
+  75% { transform: translateX(8px); }
+}
+
+/* 서버 위험 상태 */
+.server-critical {
+  animation: criticalGlow 0.5s infinite;
+}
+
+@keyframes criticalGlow {
+  0%, 100% { border-top-color: var(--green); }
+  50% { border-top-color: var(--red); }
+}

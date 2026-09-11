@@ -1,0 +1,348 @@
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 500;
+  padding: 20px;
+}
+
+.modal-content {
+  background: linear-gradient(180deg, #0d1225, #1a1f3a);
+  border: 2px solid var(--green);
+  border-radius: 12px;
+  padding: 25px;
+  max-width: 600px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 0 40px rgba(0,255,136,0.3);
+}
+
+.modal-content h2 {
+  color: var(--green);
+  margin-bottom: 10px;
+  font-size: 22px;
+  text-shadow: 0 0 15px var(--green);
+}
+
+.modal-desc {
+  color: #88ffbb;
+  font-size: 13px;
+  margin-bottom: 20px;
+  line-height: 1.6;
+}
+
+/* 방화벽 모달 */
+#firewall-energy {
+  background: rgba(255,150,50,0.15);
+  border: 1px solid var(--orange);
+  padding: 8px 15px;
+  border-radius: 6px;
+  color: var(--orange);
+  margin-bottom: 15px;
+  font-size: 14px;
+}
+
+#rules-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+  min-height: 60px;
+}
+
+.rule-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(255,150,50,0.1);
+  border: 1px solid var(--orange);
+  padding: 10px 15px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--orange);
+}
+
+.rule-item button {
+  background: transparent;
+  border: 1px solid var(--red);
+  color: var(--red);
+  padding: 3px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.rule-item button:hover { background: var(--red); color: #000; }
+
+.rule-creator {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.rule-creator select,
+.rule-creator input {
+  flex: 1;
+  background: #0a0e27;
+  border: 1px solid var(--border);
+  color: var(--green);
+  padding: 10px;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 13px;
+  min-width: 100px;
+}
+
+.rule-creator input::placeholder { color: #00ff8855; }
+
+.rule-creator button {
+  background: var(--orange);
+  color: #000;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-family: inherit;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.rule-creator button:hover {
+  box-shadow: 0 0 15px var(--orange);
+}
+
+/* 로그 분석 모달 */
+.log-content { max-width: 800px; }
+
+#log-timer {
+  background: rgba(0,204,255,0.15);
+  border: 1px solid var(--blue);
+  padding: 8px 15px;
+  border-radius: 6px;
+  color: var(--blue);
+  margin-bottom: 15px;
+  text-align: center;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+#log-stream {
+  background: #000;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  height: 400px;
+  overflow-y: auto;
+  padding: 10px;
+  font-size: 12px;
+  font-family: 'Courier New', monospace;
+}
+
+.log-line {
+  padding: 6px 10px;
+  border-radius: 4px;
+  margin-bottom: 3px;
+  cursor: pointer;
+  transition: background 0.15s;
+  border-left: 3px solid transparent;
+  color: #88ffbb;
+}
+
+.log-line:hover { background: rgba(0,255,136,0.1); }
+
+.log-line.threat {
+  color: #ffcc88;
+}
+
+.log-line.isolated {
+  background: rgba(0,255,136,0.15);
+  border-left-color: var(--green);
+  color: var(--green);
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+.log-line.missed {
+  background: rgba(255,50,50,0.15);
+  border-left-color: var(--red);
+  color: var(--red);
+  pointer-events: none;
+}
+
+/* 암호화 모달 */
+.crypto-content { max-width: 650px; }
+
+#cipher-display {
+  background: #000;
+  border: 1px solid var(--blue);
+  border-radius: 8px;
+  padding: 20px;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  color: var(--blue);
+  text-align: center;
+  margin-bottom: 20px;
+  word-break: break-all;
+  min-height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: 2px;
+}
+
+#crypto-choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 15px;
+}
+
+.crypto-choice {
+  background: rgba(0,204,255,0.1);
+  border: 1px solid var(--blue);
+  color: var(--blue);
+  padding: 15px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.crypto-choice:hover {
+  background: var(--blue);
+  color: #000;
+  box-shadow: 0 0 20px var(--blue);
+}
+
+.crypto-choice.correct {
+  background: var(--green);
+  color: #000;
+  border-color: var(--green);
+}
+
+.crypto-choice.wrong {
+  background: var(--red);
+  color: #000;
+  border-color: var(--red);
+}
+
+/* 게임 오버 */
+.gameover-title {
+  font-size: 42px;
+  color: var(--red) !important;
+  text-shadow: 0 0 30px var(--red) !important;
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.gameover-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+  margin-bottom: 25px;
+  font-size: 15px;
+}
+
+.gameover-stats > div {
+  background: rgba(0,255,136,0.08);
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+.gameover-stats b {
+  color: #fff;
+  font-size: 20px;
+  display: block;
+  margin-top: 5px;
+}
+
+.education-tip {
+  background: rgba(0,204,255,0.1);
+  border: 1px solid var(--blue);
+  color: #88ddff;
+  padding: 15px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.6;
+  margin-bottom: 20px;
+  text-align: left;
+}
+
+/* 공통 버튼 */
+.modal-content button,
+#restart-btn,
+#resume-btn,
+#quit-btn {
+  background: transparent;
+  border: 2px solid var(--green);
+  color: var(--green);
+  padding: 12px 30px;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.2s;
+  letter-spacing: 2px;
+  margin: 5px;
+}
+
+.modal-content button:hover,
+#restart-btn:hover {
+  background: var(--green);
+  color: #000;
+  box-shadow: 0 0 20px var(--green);
+}
+
+.close-btn {
+  width: 100%;
+  margin-top: 10px;
+}
+
+/* 멀티플레이어 UI */
+.mp-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin: 20px 0;
+}
+
+.mp-role-info {
+  background: rgba(0,255,136,0.1);
+  padding: 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.mp-scoreboard {
+  position: absolute;
+  top: 70px;
+  left: 20px;
+  display: flex;
+  gap: 15px;
+  background: rgba(0,0,0,0.8);
+  border: 1px solid var(--border);
+  padding: 10px 15px;
+  border-radius: 8px;
+  font-size: 13px;
+  z-index: 30;
+}
+
+.mp-player {
+  padding: 5px 10px;
+  border-radius: 4px;
+}
+
+.mp-player.defender { color: var(--green); }
+.mp-player.attacker { color: var(--red); }
+
+.mp-player.active {
+  background: rgba(255,255,255,0.1);
+  font-weight: bold;
+}
