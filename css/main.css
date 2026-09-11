@@ -328,3 +328,169 @@ body {
 .win-lose-conditions b {
   color: #fff;
 }
+
+/* ============================================================
+   ✅ [T02-C10/C11] 해상도 대응 (1366×768 이상에서 잘림 0건)
+   ============================================================ */
+
+/* 1400px 이하: HUD 컴팩트 모드 */
+@media (max-width: 1400px) {
+  #hud {
+    padding: 8px 12px;
+    height: 54px;
+  }
+  .hud-left, .hud-right {
+    gap: 12px;
+  }
+  .hud-item {
+    font-size: 13px;
+  }
+  #hp-bar-container {
+    width: 200px;
+    height: 20px;
+  }
+  #hp-text {
+    font-size: 11px;
+  }
+  .icon-btn {
+    width: 34px;
+    height: 34px;
+    font-size: 15px;
+  }
+  #firewall-bar {
+    max-width: 320px;
+    font-size: 11px;
+    padding: 4px 10px;
+  }
+  #firewall-bar span {
+    font-size: 11px;
+  }
+  .firewall-rule-chip {
+    font-size: 10px;
+    padding: 2px 6px;
+  }
+  #boss-hp-container {
+    width: 420px;
+    height: 26px;
+  }
+  #boss-hp-text {
+    font-size: 12px;
+  }
+  #powerup-indicator {
+    top: 60px;
+    right: 12px;
+  }
+  .powerup-status {
+    font-size: 11px;
+    padding: 4px 8px;
+  }
+}
+
+/* 1200px 이하: 더 컴팩트 */
+@media (max-width: 1200px) {
+  #hud {
+    padding: 6px 10px;
+    height: 50px;
+  }
+  .hud-left, .hud-right {
+    gap: 8px;
+  }
+  .hud-item {
+    font-size: 12px;
+  }
+  .hud-item span {
+    font-size: 12px;
+  }
+  #hp-bar-container {
+    width: 160px;
+    height: 18px;
+  }
+  #hp-text {
+    font-size: 10px;
+  }
+  .icon-btn {
+    width: 30px;
+    height: 30px;
+    font-size: 13px;
+  }
+  #firewall-bar {
+    max-width: 260px;
+    padding: 3px 8px;
+  }
+  #boss-hp-container {
+    width: 340px;
+    height: 24px;
+  }
+  #server {
+    height: 70px;
+    font-size: 18px;
+    letter-spacing: 5px;
+  }
+  .server-icon {
+    font-size: 26px;
+  }
+}
+
+/* 1024px 이하: 최소 모드 */
+@media (max-width: 1024px) {
+  .hud-left, .hud-right {
+    gap: 6px;
+  }
+  .hud-item {
+    font-size: 11px;
+  }
+  #hp-bar-container {
+    width: 130px;
+  }
+  #hp-text {
+    font-size: 9px;
+  }
+  .icon-btn {
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+  }
+  #boss-hp-container {
+    width: 280px;
+  }
+}
+
+/* ============================================================
+   ✅ [T02-C07] 시작 오버레이 성공/실패 조건 스타일
+   ============================================================ */
+.win-lose-conditions {
+  background: rgba(0, 255, 136, 0.08);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 15px 20px;
+  margin: 20px 0;
+  font-size: 14px;
+  line-height: 1.8;
+  text-align: center;
+}
+.win-lose-conditions p {
+  color: #88ffbb;
+  margin: 4px 0;
+}
+.win-lose-conditions b {
+  color: #fff;
+}
+
+/* ============================================================
+   ✅ [T02-C10] 넘침 방지 안전장치
+   ============================================================ */
+#hud {
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+.hud-left, .hud-right {
+  flex-shrink: 0;
+  min-width: 0;
+}
+.hud-center {
+  flex-shrink: 1;
+  min-width: 0;
+}
+#game-area {
+  overflow: hidden;
+}
