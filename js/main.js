@@ -1,30 +1,44 @@
+// ============================================================
 // 진입점 - 초기화 및 모드 선택 처리
+// ============================================================
 document.addEventListener('DOMContentLoaded', () => {
   // 게임 초기화
   UI.init();
   Game.init();
 
+  // ✅ [T02-C17] 오디오 초기화는 여기서 하지 않음 (사용자 제스처 필요)
+
   // 모드 선택 버튼
   document.querySelectorAll('.mode-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const mode = btn.dataset.mode;
+
+      // ✅ [T02-C17] 첫 클릭 시 오디오 초기화 + unlock
       AudioManager.init();
+      AudioManager.unlock();
+
       UI.elements.overlay.style.display = 'none';
 
       if (mode === 'multiplayer') {
         Multiplayer.start();
       } else if (mode === 'log') {
-        // 로그 분석 전용 모드
         startLogOnlyMode();
       } else {
         Game.start(mode);
       }
     });
   });
+
+  // ✅ [T02-C17] 첫 페이지 클릭에도 오디오 초기화 시도 (백업)
+  document.addEventListener('click', () => {
+    if (!AudioManager.initialized) {
+      AudioManager.init();
+    }
+    AudioManager.unlock();
+  }, { passive: true });
 });
 
 function startLogOnlyMode() {
-  // 로그 분석만 반복하는 모드
   let totalScore = 0;
   let rounds = 0;
   const maxRounds = 3;

@@ -1,6 +1,9 @@
-// 보스 라운드 시스템
+// ============================================================
+// 보스 라운드 시스템 (중복 격파 방지)
+// ============================================================
 const BossManager = {
   active: false,
+  defeated: false,        // ✅ [T02-C17] 중복 격파 방지
   boss: null,
   hp: 0,
   maxHp: 0,
@@ -16,6 +19,7 @@ const BossManager = {
     this.spawnInterval = config.spawnRate;
     this.spawnTimer = 0;
     this.active = true;
+    this.defeated = false;   // ✅ 리셋
     this.onDefeat = onDefeat;
 
     this.showWarning();
@@ -24,8 +28,9 @@ const BossManager = {
 
   showWarning() {
     const warning = Utils.createEl('div', 'boss-warning', `⚠ ${this.boss.name} 등장 ⚠`);
-    document.getElementById('game-area').appendChild(warning);
-    AudioManager.bossWarning();
+    const area = document.getElementById('game-area');
+    if (area) area.appendChild(warning);
+    try { AudioManager.bossWarning(); } catch (e) {}
     Utils.removeAfter(warning, 2000);
   },
 
@@ -33,43 +38,42 @@ const BossManager = {
     const container = document.getElementById('boss-hp-container');
     const bar = document.getElementById('boss-hp-bar');
     const text = document.getElementById('boss-hp-text');
-    
+    if (!container || !bar || !text) return;
+
     container.classList.remove('hidden');
     bar.style.width = (this.hp / this.maxHp * 100) + '%';
     text.textContent = `${this.boss.icon} ${this.boss.name} - ${this.hp}/${this.maxHp}`;
   },
 
-  // 보스가 공격 패킷을 스폰할지 결정
   update(dt, spawnCallback) {
     if (!this.active) return;
 
-    this.spawnTimer += dt * 16.67;  // ms 근사
+    this.spawnTimer += dt * 16.67;
     if (this.spawnTimer >= this.spawnInterval) {
       this.spawnTimer = 0;
-      // 보스는 공격 패킷 위주로 스폰
       const attackTypes = Object.values(PACKET_TYPES).filter(p => p.isAttack);
       const def = Utils.weightedRandom(attackTypes);
       spawnCallback(def, true);
     }
   },
 
-  // 보스 피격
+  // ✅ [T02-C17] 중복 hit/defeat 방지
   hit(damage = 10) {
-    if (!this.active) return;
+    if (!this.active || this.defeated) return;
     this.hp = Math.max(0, this.hp - damage);
     this.updateUI();
-
     if (this.hp <= 0) {
+      this.defeated = true;
       this.defeat();
     }
   },
 
   defeat() {
+    if (!this.active) return;
     this.active = false;
     const container = document.getElementById('boss-hp-container');
-    container.classList.add('hidden');
+    if (container) container.classList.add('hidden');
 
-    // 축하 효과
     const area = document.getElementById('game-area');
     for (let i = 0; i < 5; i++) {
       setTimeout(() => {
@@ -79,9 +83,8 @@ const BossManager = {
       }, i * 150);
     }
 
-    // 플로팅 텍스트
     const text = Utils.createEl('div', 'combo-text', '🎉 BOSS 격파! +500');
-    area.appendChild(text);
+    if (area) area.appendChild(text);
     Utils.removeAfter(text, 800);
 
     if (this.onDefeat) this.onDefeat();
@@ -89,8 +92,10 @@ const BossManager = {
 
   reset() {
     this.active = false;
+    this.defeated = false;
     this.boss = null;
     this.hp = 0;
-    document.getElementById('boss-hp-container').classList.add('hidden');
+    const container = document.getElementById('boss-hp-container');
+    if (container) container.classList.add('hidden');
   }
 };

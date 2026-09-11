@@ -1,13 +1,18 @@
+// ============================================================
 // 메인 게임 로직
+// ============================================================
 const Game = {
   canvas: null,
   ctx: null,
   packets: [],
   powerups: [],
-  activePowerups: {},   // { type: endTime }
+  activePowerups: {},
   state: {
     running: false,
     paused: false,
+    finished: false,       // ✅ [T02-C07/C17] 종료 플래그
+    autoPaused: false,     // ✅ [T02-C14]
+    pausedAt: 0,           // ✅ [T02-C14]
     score: 0,
     hp: CONFIG.INITIAL_HP,
     wave: 1,
@@ -20,20 +25,23 @@ const Game = {
     fallSpeed: CONFIG.BASE_FALL_SPEED,
     lastTime: 0,
     waveTimer: 0,
-    attackCounts: {}
+    playTime: 0,           // ✅ [T02-C07] 30초 타이머
+    attackCounts: {},
+    highscore: 0
   },
   mode: 'classic',
-  lastSpawnSecond: 0,
   gameLoopId: null,
 
   init() {
     this.canvas = document.getElementById('game-canvas');
+    if (!this.canvas) return;
     this.ctx = this.canvas.getContext('2d');
     this.resizeCanvas();
     window.addEventListener('resize', () => this.resizeCanvas());
   },
 
   resizeCanvas() {
+    if (!this.canvas) return;
     this.canvas.width = window.innerWidth;
     this.canvas.height = window.innerHeight - 60;
   },
@@ -41,26 +49,38 @@ const Game = {
   start(mode = 'classic') {
     this.mode = mode;
     this.reset();
+
+    // ✅ [T02-C24/C25] 저장값 로드 (손상/빈 값 자동 폴백)
+    const saved = Utils.loadFromStorage();
+    this.state.highscore = Number.isFinite(saved['pd.highscore']) ? saved['pd.highscore'] : 0;
+    AudioManager.muted = (saved['pd.muted'] === true);
+
+    // totalGames 증가
+    const totalGames = Number.isFinite(saved['pd.totalGames']) ? saved['pd.totalGames'] : 0;
+    Utils.saveToStorage('pd.totalGames', totalGames + 1);
+
     this.state.running = true;
     this.state.paused = false;
-    this.state.lastTime = performance.now();
-    
+    this.state.finished = false;
+    this.state.lastTime = 0;   // ✅ [T02-C17] 첫 프레임 감지용
+
     UI.updateHUD(this.state);
-    this.scheduleSpawn();
     this.gameLoopId = requestAnimationFrame((t) => this.loop(t));
   },
 
   reset() {
-    // 기존 패킷 제거
     this.packets.forEach(p => p.el && p.el.remove());
     this.powerups.forEach(p => p.el && p.el.remove());
     this.packets = [];
     this.powerups = [];
     this.activePowerups = {};
-    
+
     this.state = {
       running: false,
       paused: false,
+      finished: false,
+      autoPaused: false,
+      pausedAt: 0,
       score: 0,
       hp: CONFIG.INITIAL_HP,
       wave: 1,
@@ -71,80 +91,82 @@ const Game = {
       spawnTimer: 0,
       spawnRate: CONFIG.BASE_SPAWN_RATE,
       fallSpeed: CONFIG.BASE_FALL_SPEED,
-      lastTime: performance.now(),
+      lastTime: 0,
       waveTimer: 0,
-      attackCounts: {}
+      playTime: 0,
+      attackCounts: {},
+      highscore: 0
     };
-    
+
     Firewall.reset();
     BossManager.reset();
-    UI.renderFirewallBar();
+    if (UI.renderFirewallBar) UI.renderFirewallBar();
   },
 
+  // ✅ [T02-C14] 일시정지
   pause() {
+    if (this.state.paused) return;
     this.state.paused = true;
+    this.state.pausedAt = performance.now();
+    this.state.autoPaused = true;
   },
 
+  // ✅ [T02-C14] 재개 (타이머 안전 재설정)
   resume() {
+    if (!this.state.paused) return;
     this.state.paused = false;
-    this.state.lastTime = performance.now();
-  },
-
-  scheduleSpawn() {
-    this.state.spawnTimer = 0;
+    this.state.autoPaused = false;
+    // lastTime을 현재 시각으로 갱신하여 dt 폭발 방지
+    this.state.lastTime = 0;   // loop()에서 첫 프레임으로 재감지
   },
 
   spawnPacket(forcedDef = null, isBossSpawn = false, atX = null) {
-    if (!this.state.running || this.state.paused) return;
-    
+    if (!this.state.running || this.state.paused || this.state.finished) return;
+
     let def = forcedDef;
     let isEncrypted = false;
 
     if (!def) {
       const allDefs = Object.values(PACKET_TYPES);
       def = Utils.weightedRandom(allDefs);
-      
-      // 암호화 패킷 확률
       if (Math.random() < CONFIG.CRYPTO_PACKET_CHANCE) {
         isEncrypted = true;
       }
     }
 
     const gameArea = document.getElementById('game-area');
+    if (!gameArea) return;
+
     const maxX = gameArea.clientWidth - 180;
-    const x = atX !== null ? Math.max(20, Math.min(maxX, atX - 60)) : Utils.randInt(20, maxX);
+    const x = atX !== null ? Math.max(20, Math.min(maxX, atX - 60)) : Utils.randInt(20, Math.max(20, maxX));
     const y = -50;
 
     const packet = new Packet(x, y, def, {
       encrypted: isEncrypted,
       isBoss: isBossSpawn
     });
-    
-    // 낙하 속도 반영
+
     packet.speedMultiplier = this.state.fallSpeed / CONFIG.BASE_FALL_SPEED;
 
-    // 느린 모션 파워업 적용
     if (this.activePowerups.slow && Date.now() < this.activePowerups.slow) {
       packet.speedMultiplier *= 0.5;
     }
 
-    // 클릭 이벤트
     packet.el.addEventListener('click', (e) => {
       e.stopPropagation();
       this.handlePacketClick(packet, e);
     });
 
-    document.getElementById('packet-layer').appendChild(packet.el);
+    const layer = document.getElementById('packet-layer');
+    if (layer) layer.appendChild(packet.el);
     this.packets.push(packet);
 
-    // 공격 카운트
     if (def.isAttack) {
       this.state.attackCounts[def.type] = (this.state.attackCounts[def.type] || 0) + 1;
     }
   },
 
   spawnAttackAt(x, y) {
-    // 멀티플레이어 공격자용
     const attackDefs = Object.values(PACKET_TYPES).filter(p => p.isAttack);
     const def = Utils.weightedRandom(attackDefs);
     this.spawnPacket(def, false, x);
@@ -155,43 +177,48 @@ const Game = {
     const types = Object.keys(POWERUPS);
     const type = types[Utils.randInt(0, types.length - 1)];
     const gameArea = document.getElementById('game-area');
+    if (!gameArea) return;
+
     const maxX = gameArea.clientWidth - 80;
-    const x = Utils.randInt(20, maxX);
+    const x = Utils.randInt(20, Math.max(20, maxX));
     const y = -50;
-    
+
     const pu = new PowerUp(x, y, type);
     pu.el.addEventListener('click', (e) => {
       e.stopPropagation();
       this.activatePowerUp(type);
       pu.destroy();
     });
-    document.getElementById('powerup-layer').appendChild(pu.el);
+    const layer = document.getElementById('powerup-layer');
+    if (layer) layer.appendChild(pu.el);
     this.powerups.push(pu);
   },
 
   activatePowerUp(type) {
     const def = POWERUPS[type];
     this.activePowerups[type] = Date.now() + def.duration;
-    AudioManager.powerup();
-    
+    try { AudioManager.powerup(); } catch (e) {}
+
     UI.showFloatText(
       window.innerWidth / 2 - 100,
       window.innerHeight / 2,
       `${def.icon} ${def.name}!`,
       def.color
     );
-    
+
     this.renderPowerupIndicators();
   },
 
   renderPowerupIndicators() {
     let container = document.getElementById('powerup-indicators');
-    if (!container) {
+    const area = document.getElementById('game-area');
+    if (!container && area) {
       container = Utils.createEl('div', 'powerup-indicator');
       container.id = 'powerup-indicators';
-      document.getElementById('game-area').appendChild(container);
+      area.appendChild(container);
     }
-    
+    if (!container) return;
+
     container.innerHTML = '';
     const now = Date.now();
     Object.keys(this.activePowerups).forEach(type => {
@@ -208,9 +235,9 @@ const Game = {
   },
 
   handlePacketClick(packet, event) {
-    if (packet.resolved || !this.state.running || this.state.paused) return;
+    if (packet.resolved || !this.state.running || this.state.paused || this.state.finished) return;
 
-    // 암호화 패킷은 복호화 미니게임
+    // 암호화 패킷 → 복호화 미니게임
     if (packet.encrypted) {
       this.pause();
       CryptoGame.start(packet, (result) => {
@@ -218,14 +245,12 @@ const Game = {
         if (result.correct) {
           this.resolvePacket(packet, packet.isAttack);
         } else {
-          // 오답 처리: 반대로
           this.resolvePacket(packet, !packet.isAttack);
         }
       });
       return;
     }
 
-    // 정상 판정
     this.resolvePacket(packet, packet.isAttack);
   },
 
@@ -233,50 +258,44 @@ const Game = {
     if (packet.resolved) return;
 
     if (wasCorrectBlock) {
-      // 공격 차단 성공
       packet.markBlocked();
       this.addScore(CONFIG.SCORE_PER_ATTACK_BLOCK);
       this.incrementCombo();
       this.state.blockedCount++;
-      
+
       new Particle(packet.x + 40, packet.y + 20, '#00ff88', 10);
       UI.showFloatText(packet.x, packet.y, `+${CONFIG.SCORE_PER_ATTACK_BLOCK}`, '#00ff88');
-      AudioManager.blockSuccess();
+      try { AudioManager.blockSuccess(); } catch (e) {}
 
-      // 보스 피격
       if (BossManager.active) {
         BossManager.hit(10);
       }
     } else {
-      // 정상 패킷을 잘못 차단 (오탐)
       packet.markBlocked();
       this.addScore(CONFIG.SCORE_PENALTY_FALSE_POSITIVE);
       this.resetCombo();
-      
+
       new Particle(packet.x + 40, packet.y + 20, '#ff3232', 8);
       UI.showFloatText(packet.x, packet.y, `${CONFIG.SCORE_PENALTY_FALSE_POSITIVE}`, '#ff3232');
-      AudioManager.falsePositive();
+      try { AudioManager.falsePositive(); } catch (e) {}
     }
-    
+
     packet.destroy();
     UI.updateHUD(this.state);
   },
 
-  // 서버 도달 처리
   handleServerReach(packet) {
-    if (packet.resolved) return;
+    if (packet.resolved || this.state.finished) return;
 
     if (packet.isAttack) {
-      // 공격 통과 → HP 감소
       packet.markPassed();
       this.state.hp -= CONFIG.HP_DAMAGE_PER_ATTACK;
       this.resetCombo();
       UI.flashDamage();
       UI.showFloatText(packet.x, packet.y - 30, `-${CONFIG.HP_DAMAGE_PER_ATTACK} HP`, '#ff3232');
-      AudioManager.damage();
+      try { AudioManager.damage(); } catch (e) {}
       new Particle(packet.x + 40, packet.y, '#ff3232', 15);
     } else {
-      // 정상 통과 → 점수
       packet.markPassed();
       this.addScore(CONFIG.SCORE_PER_LEGIT_PASS);
       UI.showFloatText(packet.x, packet.y - 30, `+${CONFIG.SCORE_PER_LEGIT_PASS}`, '#00ff88');
@@ -285,19 +304,26 @@ const Game = {
     packet.destroy();
     UI.updateHUD(this.state);
 
-    if (this.state.hp <= 0) {
+    if (this.state.hp <= 0 && !this.state.finished) {
+      this.state.finished = true;
       this.gameOver();
     }
   },
 
+  // ✅ [T02-C07] 성공 조건 체크 포함
   addScore(amount) {
     let finalAmount = amount;
     if (this.activePowerups.double && Date.now() < this.activePowerups.double) {
       finalAmount *= 2;
     }
     this.state.score += finalAmount;
-    // 음수 점수 방지
     if (this.state.score < 0) this.state.score = 0;
+
+    // ✅ 성공 조건: 100점 도달
+    if (this.state.score >= CONFIG.WIN_SCORE && !this.state.finished) {
+      this.state.finished = true;
+      this.win();
+    }
   },
 
   incrementCombo() {
@@ -306,12 +332,10 @@ const Game = {
     if (this.state.combo > this.state.maxCombo) {
       this.state.maxCombo = this.state.combo;
     }
-    
     if (this.state.combo >= 3 && this.state.combo % 3 === 0) {
       UI.showCombo(this.state.combo);
-      AudioManager.combo(this.state.combo);
+      try { AudioManager.combo(this.state.combo); } catch (e) {}
     }
-    
     UI.updateHUD(this.state);
   },
 
@@ -324,10 +348,9 @@ const Game = {
     this.state.wave++;
     this.state.spawnRate = Math.max(CONFIG.MIN_SPAWN_RATE, this.state.spawnRate - 100);
     this.state.fallSpeed = Math.min(CONFIG.MAX_FALL_SPEED, this.state.fallSpeed + 0.2);
-    
+
     UI.showWaveTransition(this.state.wave);
-    
-    // 보스 웨이브 체크
+
     if (this.state.wave % CONFIG.BOSS_WAVE_INTERVAL === 0) {
       const bossIndex = Math.floor(this.state.wave / CONFIG.BOSS_WAVE_INTERVAL) - 1;
       BossManager.start(bossIndex, () => {
@@ -338,20 +361,42 @@ const Game = {
 
   loop(timestamp) {
     if (!this.state.running) return;
-    
-    const dt = Math.min((timestamp - this.state.lastTime) / 16.67, 3); // 60fps 기준, 최대 3배까지만
-    const secondsElapsed = (timestamp - this.state.lastTime) / 1000;
+
+    // ✅ [T02-C17] 첫 프레임 감지
+    if (this.state.lastTime === 0) {
+      this.state.lastTime = timestamp;
+      this.gameLoopId = requestAnimationFrame((t) => this.loop(t));
+      return;
+    }
+
+    const rawDt = (timestamp - this.state.lastTime) / 16.67;
+    const rawSec = (timestamp - this.state.lastTime) / 1000;
+
+    // ✅ [T02-C14/C17] dt 클램프 (탭 복귀, 렉 방어)
+    const dt = Math.max(0, Math.min(rawDt, 3));
+    const secondsElapsed = Math.max(0, Math.min(rawSec, CONFIG.MAX_FRAME_DELTA));
+
     this.state.lastTime = timestamp;
 
-    if (!this.state.paused) {
+    if (!this.state.paused && !this.state.finished) {
       this.update(dt, secondsElapsed);
     }
-    
+
     this.gameLoopId = requestAnimationFrame((t) => this.loop(t));
   },
 
   update(dt, secondsElapsed) {
-    const serverY = document.getElementById('game-area').clientHeight - CONFIG.SERVER_HEIGHT + 20;
+    const area = document.getElementById('game-area');
+    if (!area) return;
+    const serverY = area.clientHeight - CONFIG.SERVER_HEIGHT + 20;
+
+    // ✅ [T02-C07] 30초 타이머
+    this.state.playTime += secondsElapsed * 1000;
+    if (this.state.playTime >= CONFIG.MAX_PLAY_TIME && !this.state.finished) {
+      this.state.finished = true;
+      this.gameOver();   // 시간 초과 → 실패 처리
+      return;
+    }
 
     // 방화벽 에너지 재생
     Firewall.update(dt, secondsElapsed);
@@ -361,7 +406,7 @@ const Game = {
       this.resetCombo();
     }
 
-    // 패킷 스폰 타이머
+    // 패킷 스폰
     this.state.spawnTimer += secondsElapsed * 1000;
     if (this.state.spawnTimer >= this.state.spawnRate) {
       this.state.spawnTimer = 0;
@@ -395,15 +440,14 @@ const Game = {
     // 패킷 업데이트
     for (let i = this.packets.length - 1; i >= 0; i--) {
       const p = this.packets[i];
-      if (p.dead) {
+      if (p.dead || !p.el) {
         this.packets.splice(i, 1);
         continue;
       }
 
       // WAF 자동 차단
       if (!p.resolved && this.activePowerups.waf && Date.now() < this.activePowerups.waf) {
-        if (p.isAttack && Firewall.shouldAutoBlock(p) === false) {
-          // WAF는 모든 공격 차단
+        if (p.isAttack) {
           p.resolved = true;
           p.markBlocked();
           this.addScore(5);
@@ -424,7 +468,6 @@ const Game = {
           this.state.blockedCount++;
           UI.showFloatText(p.x, p.y, '+5 🔥', '#ff9632');
         } else {
-          // 오탐
           p.markBlocked();
           this.addScore(-3);
           UI.showFloatText(p.x, p.y, '-3 오탐', '#ff3232');
@@ -435,9 +478,9 @@ const Game = {
 
       p.update(dt);
 
-      // 서버 도달
       if (p.y >= serverY) {
         this.handleServerReach(p);
+        if (this.state.finished) return;
       }
     }
 
@@ -458,10 +501,26 @@ const Game = {
     UI.updateHUD(this.state);
   },
 
-  gameOver() {
+  // ✅ [T02-C07] 승리 처리
+  win() {
     this.state.running = false;
     cancelAnimationFrame(this.gameLoopId);
-    
+
+    this.packets.forEach(p => p.el && p.el.remove());
+    this.powerups.forEach(p => p.el && p.el.remove());
+
+    Utils.setHighScore(this.state.score);
+    try { AudioManager.win(); } catch (e) {}
+
+    UI.showWinScreen(this.state);
+  },
+
+  gameOver() {
+    if (!this.state.running) return;
+    this.state.running = false;
+    this.state.finished = true;
+    cancelAnimationFrame(this.gameLoopId);
+
     // 가장 많이 나온 공격 유형
     let mostFrequent = 'general';
     let maxCount = 0;
@@ -473,14 +532,12 @@ const Game = {
     });
     this.state.mostFrequentAttack = mostFrequent;
 
-    // 최고점 갱신
     Utils.setHighScore(this.state.score);
 
-    // 남은 패킷 정리
     this.packets.forEach(p => p.el && p.el.remove());
     this.powerups.forEach(p => p.el && p.el.remove());
-    
-    AudioManager.gameOver();
+
+    try { AudioManager.gameOver(); } catch (e) {}
     UI.showGameOver(this.state);
   },
 
